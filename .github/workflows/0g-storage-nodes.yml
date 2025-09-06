@@ -112,6 +112,17 @@ jobs:
           echo "- RPC Port: $NODE_PORT"
           echo "- Network Port: $NETWORK_PORT"
           echo "- RPC URL: $RPC_URL"
+          echo "- Config file: ~/0g-storage-node/run/config.toml"
+          
+          # Verify configuration was applied correctly
+          echo "Configuration verification:"
+          echo "- Miner key set: $(grep -c 'miner_key.*=' ~/0g-storage-node/run/config.toml || echo 'ERROR')"
+          echo "- RPC endpoint set: $(grep -c 'blockchain_rpc_endpoint.*=' ~/0g-storage-node/run/config.toml || echo 'ERROR')"
+          echo "- RPC listen address: $(grep 'listen_address.*=' ~/0g-storage-node/run/config.toml | head -1 || echo 'ERROR')"
+          
+          # Show first few lines of config for debugging
+          echo "Config preview (first 10 lines):"
+          head -10 ~/0g-storage-node/run/config.toml
 
       - name: Download Snapshot (if needed)
         run: |

@@ -222,24 +222,85 @@ main() {
     # Create state directory if it doesn't exist
     mkdir -p "$STATE_DIR"
     
+    # Verify binary exists and is executable
+    if [ ! -f "$NODE_DIR/target/release/zgs_node" ]; then
+        error "Node binary not found at $NODE_DIR/target/release/zgs_node"
+        exit 1
+    fi
+    
+    if [ ! -x "$NODE_DIR/target/release/zgs_node" ]; then
+        log "Making node binary executable..."
+        chmod +x "$NODE_DIR/target/release/zgs_node"
+    fi
+    
+    # Test binary execution
+    log "Testing binary execution..."
+    if "$NODE_DIR/target/release/zgs_node" --help >/dev/null 2>&1; then
+        log "Binary test successful"
+    else
+        error "Binary test failed - checking dependencies..."
+        ldd "$NODE_DIR/target/release/zgs_node" 2>&1 | head -10 | while read line; do
+            error "  $line"
+        done
+        exit 1
+    fi
+    
+    # Verify config file
+    log "Checking configuration file: $CONFIG_FILE"
+    if [ ! -f "$CONFIG_FILE" ]; then
+        error "Config file not found: $CONFIG_FILE"
+        exit 1
+    fi
+    
+    # Show config content for debugging
+    log "Configuration preview:"
+    head -20 "$CONFIG_FILE" | while read line; do
+        log "  $line"
+    done
+    
+    # Create log directory if it doesn't exist
+    mkdir -p "$NODE_DIR/run/log"
+    
     # Start the node
     log "Starting 0G Storage Node binary..."
     cd "$NODE_DIR/run"
     
-    # Start node in background
-    "$NODE_DIR/target/release/zgs_node" --config "$CONFIG_FILE" >> "$LOG_FILE" 2>&1 &
+    # Try to start node and capture any immediate errors
+    log "Executing: $NODE_DIR/target/release/zgs_node --config $CONFIG_FILE"
+    
+    # Start node in background with detailed logging
+    "$NODE_DIR/target/release/zgs_node" --config "$CONFIG_FILE" > "$LOG_FILE" 2>&1 &
     NODE_PID=$!
     
     log "Node started with PID: $NODE_PID"
     
-    # Wait a bit to ensure the node starts properly
-    sleep 10
+    # Wait a bit and check multiple times
+    for i in {1..5}; do
+        sleep 2
+        if kill -0 $NODE_PID 2>/dev/null; then
+            log "Node is running (check $i/5)"
+        else
+            error "Node process crashed after $((i*2)) seconds"
+            
+            # Show the last few lines of the log file for debugging
+            if [ -f "$LOG_FILE" ]; then
+                error "Last 20 lines of node log:"
+                tail -20 "$LOG_FILE" | while read line; do
+                    error "  $line"
+                done
+            fi
+            
+            # Also check system logs
+            error "System log entries for zgs_node:"
+            journalctl --no-pager -u zgs 2>/dev/null | tail -10 | while read line; do
+                error "  $line"
+            done || error "No system logs available"
+            
+            exit 1
+        fi
+    done
     
-    # Check if process is still running
-    if ! kill -0 $NODE_PID 2>/dev/null; then
-        error "Node process failed to start or crashed immediately"
-        exit 1
-    fi
+    log "Node successfully started and running"
     
     # Start monitoring in background
     monitor_node &
