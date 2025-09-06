@@ -55,8 +55,8 @@ sync_file_on_announcement_enabled = true
 
 # JSON RPC configuration
 [rpc]
-# RPC listen address 
-listen_address = "127.0.0.1:5678"
+# RPC listen address - unique port per node instance
+listen_address = "127.0.0.1:{{NODE_PORT}}"
 # Enable HTTP
 enabled = true
 # Max request body size
@@ -64,8 +64,8 @@ max_request_body_size = 33554432
 
 # Network configuration
 [network]
-# Network listen address - unique port per node instance
-listen_address = "/ip4/0.0.0.0/tcp/{{NODE_PORT}}"
+# Network listen address - unique port per node instance  
+listen_address = "/ip4/0.0.0.0/tcp/{{NETWORK_PORT}}"
 # Boot nodes for 0G testnet
 boot_nodes = [
     "/ip4/54.219.26.22/tcp/1234/p2p/16Uiu2HAmTVDGNhkHD98zDnJxQWu3i1FL1aFYeh9wiQTNu4pDCgps",

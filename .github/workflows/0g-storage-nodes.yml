@@ -69,22 +69,47 @@ jobs:
 
       - name: Configure Node
         run: |
-          # Extract the private key for this node instance
-          MINER_KEY=$(echo '${{ secrets.MINER_PRIVATE_KEYS }}' | jq -r ".[${{ matrix.node_id }} - 1]")
-          RPC_URL=$(echo '${{ secrets.RPC_ENDPOINTS }}' | jq -r ".[${{ matrix.node_id }} - 1] // .[0]")
+          # Use single private key and RPC for all nodes (simpler setup)
+          MINER_KEY="${{ secrets.MINER_PRIVATE_KEY }}"
+          RPC_URL="${{ secrets.RPC_ENDPOINT }}"
           
-          if [ "$MINER_KEY" == "null" ] || [ -z "$MINER_KEY" ]; then
-            echo "Error: No miner key found for node ${{ matrix.node_id }}"
+          # Fallback to array format if user prefers individual keys per node
+          if [ -z "$MINER_KEY" ]; then
+            MINER_KEY=$(echo '${{ secrets.MINER_PRIVATE_KEYS }}' | jq -r ".[${{ matrix.node_id }} - 1] // .[0]")
+          fi
+          
+          if [ -z "$RPC_URL" ]; then
+            RPC_URL=$(echo '${{ secrets.RPC_ENDPOINTS }}' | jq -r ".[${{ matrix.node_id }} - 1] // .[0]")
+          fi
+          
+          if [ -z "$MINER_KEY" ] || [ "$MINER_KEY" == "null" ]; then
+            echo "Error: No miner key found. Set either MINER_PRIVATE_KEY or MINER_PRIVATE_KEYS secret"
+            exit 1
+          fi
+          
+          if [ -z "$RPC_URL" ] || [ "$RPC_URL" == "null" ]; then
+            echo "Error: No RPC URL found. Set either RPC_ENDPOINT or RPC_ENDPOINTS secret"
             exit 1
           fi
           
           # Create config from template
           cp config/config.template.toml ~/0g-storage-node/run/config.toml
           
+          # Calculate unique port for this node (5678 + node_id)
+          NODE_PORT=$((5678 + ${{ matrix.node_id }}))
+          NETWORK_PORT=$((1234 + ${{ matrix.node_id }}))
+          
           # Replace placeholders
           sed -i "s/{{MINER_KEY}}/$MINER_KEY/g" ~/0g-storage-node/run/config.toml
           sed -i "s|{{RPC_URL}}|$RPC_URL|g" ~/0g-storage-node/run/config.toml
           sed -i "s/{{NODE_ID}}/${{ matrix.node_id }}/g" ~/0g-storage-node/run/config.toml
+          sed -i "s/{{NODE_PORT}}/$NODE_PORT/g" ~/0g-storage-node/run/config.toml
+          sed -i "s/{{NETWORK_PORT}}/$NETWORK_PORT/g" ~/0g-storage-node/run/config.toml
+          
+          echo "Node ${{ matrix.node_id }} configured with:"
+          echo "- RPC Port: $NODE_PORT"
+          echo "- Network Port: $NETWORK_PORT"
+          echo "- RPC URL: $RPC_URL"
 
       - name: Download Snapshot (if needed)
         run: |

@@ -35,8 +35,9 @@ info() {
 
 # Function to get final node status
 get_final_status() {
+    local node_port=$((5678 + ${NODE_ID}))
     local response
-    response=$(curl -s -X POST http://localhost:5678 \
+    response=$(curl -s -X POST http://localhost:${node_port} \
         -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"zgs_getStatus","params":[],"id":1}' \
         --max-time 10 2>/dev/null)

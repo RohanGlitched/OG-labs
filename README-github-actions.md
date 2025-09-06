@@ -51,13 +51,31 @@ GitHub Actions Workflow
 
 Set the following secrets in your GitHub repository (`Settings > Secrets and variables > Actions`):
 
+#### Option 1: Single Credentials (Recommended - Simpler Setup)
+
+| Secret Name | Description | Example Value |
+|-------------|-------------|---------------|
+| `MINER_PRIVATE_KEY` | Your wallet's private key (without 0x) | `abcdef123456789...` |
+| `RPC_ENDPOINT` | RPC endpoint URL | `https://evmrpc-testnet.0g.ai` |
+
+#### Option 2: Individual Credentials Per Node (Advanced)
+
 | Secret Name | Description | Example Format |
 |-------------|-------------|----------------|
 | `MINER_PRIVATE_KEYS` | Array of private keys for each node | `["key1", "key2", "key3", "key4", "key5"]` |
 | `RPC_ENDPOINTS` | Array of RPC endpoints | `["https://evmrpc-testnet.0g.ai", "https://rpc-1.0g.ai"]` |
 
+> **Note**: The workflow supports both methods. If you set `MINER_PRIVATE_KEY` and `RPC_ENDPOINT`, all nodes will use the same credentials. If you prefer individual credentials per node, use the array format.
+
 ### Wallet Preparation
 
+#### For Single Wallet (Option 1 - Recommended)
+1. **Create one wallet** that will be used by all nodes
+2. **Fund the wallet** with testnet tokens from https://faucet.0g.ai/
+3. **Extract private key** (without the `0x` prefix)
+4. **Add to 0G testnet** from https://docs.0g.ai/run-a-node/testnet-information
+
+#### For Multiple Wallets (Option 2)
 1. **Create multiple wallets** (one for each node you want to run)
 2. **Fund each wallet** with testnet tokens from https://faucet.0g.ai/
 3. **Extract private keys** (without the `0x` prefix)
@@ -69,6 +87,13 @@ Set the following secrets in your GitHub repository (`Settings > Secrets and var
 
 Go to your repository's `Settings > Secrets and variables > Actions` and add:
 
+#### For Single Credentials (Recommended):
+```
+MINER_PRIVATE_KEY: your_private_key_without_0x
+RPC_ENDPOINT: https://evmrpc-testnet.0g.ai
+```
+
+#### For Individual Credentials (Advanced):
 ```json
 MINER_PRIVATE_KEYS: ["privatekey1", "privatekey2", "privatekey3", "privatekey4", "privatekey5"]
 RPC_ENDPOINTS: ["https://evmrpc-testnet.0g.ai", "https://rpc-2.0g.ai"]
@@ -90,7 +115,12 @@ schedule:
 
 ### 3. Node Configuration
 
-The `config/config.template.toml` file contains the base configuration that will be customized for each node instance.
+The `config/config.template.toml` file contains the base configuration that will be customized for each node instance. Each node automatically gets:
+
+- **Unique RPC Port**: 5679, 5680, 5681, etc. (5678 + node_id)
+- **Unique Network Port**: 1235, 1236, 1237, etc. (1234 + node_id)
+- **Same Wallet**: All nodes use the same private key and RPC endpoint
+- **Separate Database**: Each node maintains its own sync state
 
 ## 🚀 Running the Nodes
 
