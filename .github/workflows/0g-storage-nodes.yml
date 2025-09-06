@@ -26,8 +26,10 @@ jobs:
       - id: set-matrix
         run: |
           NODE_COUNT=${{ github.event.inputs.node_count || '5' }}
-          MATRIX=$(seq 1 $NODE_COUNT | jq -R . | jq -s .)
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          MATRIX=$(seq 1 $NODE_COUNT | jq -R . | jq -s . | jq -c .)
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$MATRIX" >> $GITHUB_OUTPUT  
+          echo "EOF" >> $GITHUB_OUTPUT
 
   storage-nodes:
     needs: setup-matrix
