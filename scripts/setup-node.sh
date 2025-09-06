@@ -83,13 +83,30 @@ main() {
     go version || { error "Go installation failed"; exit 1; }
     
     # Clone and build 0G Storage Node
-    log "Cloning 0G Storage Node repository..."
+    log "Setting up 0G Storage Node repository..."
+    
+    # Remove existing directory if it exists but is corrupted
+    if [ -d "$HOME/0g-storage-node" ] && [ ! -d "$HOME/0g-storage-node/.git" ]; then
+        log "Removing corrupted repository directory..."
+        rm -rf "$HOME/0g-storage-node"
+    fi
+    
     if [ ! -d "$HOME/0g-storage-node" ]; then
+        log "Cloning 0G Storage Node repository..."
         git clone https://github.com/0glabs/0g-storage-node.git $HOME/0g-storage-node
     else
         log "Repository already exists, updating..."
         cd $HOME/0g-storage-node
-        git fetch --all
+        
+        # Check if it's a valid git repository
+        if git rev-parse --git-dir > /dev/null 2>&1; then
+            git fetch --all
+        else
+            log "Invalid git repository, re-cloning..."
+            cd $HOME
+            rm -rf 0g-storage-node
+            git clone https://github.com/0glabs/0g-storage-node.git $HOME/0g-storage-node
+        fi
     fi
     
     cd $HOME/0g-storage-node
