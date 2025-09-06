@@ -258,6 +258,32 @@ main() {
         log "  $line"
     done
     
+    # Check for unreplaced placeholders
+    if grep -q "{{" "$CONFIG_FILE"; then
+        error "Configuration contains unreplaced placeholders:"
+        grep "{{" "$CONFIG_FILE" | while read line; do
+            error "  $line"
+        done
+        exit 1
+    fi
+    
+    # Validate critical config values
+    log "Validating critical configuration values..."
+    MINER_KEY_LINE=$(grep "miner_key" "$CONFIG_FILE" | head -1)
+    RPC_LINE=$(grep "blockchain_rpc_endpoint" "$CONFIG_FILE" | head -1)
+    
+    if [[ "$MINER_KEY_LINE" =~ miner_key.*=.*\"\"$ ]] || [[ "$MINER_KEY_LINE" =~ miner_key.*=.*\"{{.*}}\"$ ]]; then
+        error "Miner key is empty or not properly set: $MINER_KEY_LINE"
+        exit 1
+    fi
+    
+    if [[ "$RPC_LINE" =~ blockchain_rpc_endpoint.*=.*\"\"$ ]] || [[ "$RPC_LINE" =~ blockchain_rpc_endpoint.*=.*\"{{.*}}\"$ ]]; then
+        error "RPC endpoint is empty or not properly set: $RPC_LINE"
+        exit 1
+    fi
+    
+    log "Configuration validation passed"
+    
     # Create log directory if it doesn't exist
     mkdir -p "$NODE_DIR/run/log"
     
@@ -268,11 +294,15 @@ main() {
     # Try to start node and capture any immediate errors
     log "Executing: $NODE_DIR/target/release/zgs_node --config $CONFIG_FILE"
     
-    # Start node in background with detailed logging
-    "$NODE_DIR/target/release/zgs_node" --config "$CONFIG_FILE" > "$LOG_FILE" 2>&1 &
+    # Create separate log file for node output
+    NODE_LOG_FILE="$NODE_DIR/run/log/zgs_node_output.log"
+    
+    # Start node in background with separate logging
+    "$NODE_DIR/target/release/zgs_node" --config "$CONFIG_FILE" > "$NODE_LOG_FILE" 2>&1 &
     NODE_PID=$!
     
     log "Node started with PID: $NODE_PID"
+    log "Node logs: $NODE_LOG_FILE"
     
     # Wait a bit and check multiple times
     for i in {1..5}; do
@@ -282,19 +312,31 @@ main() {
         else
             error "Node process crashed after $((i*2)) seconds"
             
-            # Show the last few lines of the log file for debugging
-            if [ -f "$LOG_FILE" ]; then
-                error "Last 20 lines of node log:"
-                tail -20 "$LOG_FILE" | while read line; do
+            # Show the actual node log file for debugging
+            if [ -f "$NODE_LOG_FILE" ]; then
+                error "Node output log contents:"
+                cat "$NODE_LOG_FILE" | while read line; do
                     error "  $line"
                 done
+            else
+                error "No node log file found at $NODE_LOG_FILE"
             fi
             
-            # Also check system logs
-            error "System log entries for zgs_node:"
-            journalctl --no-pager -u zgs 2>/dev/null | tail -10 | while read line; do
+            # Try running node with --help to see if there are missing args
+            error "Testing node execution with --help:"
+            "$NODE_DIR/target/release/zgs_node" --help 2>&1 | head -10 | while read line; do
                 error "  $line"
-            done || error "No system logs available"
+            done
+            
+            # Check if config file has any syntax errors
+            error "Config file syntax check:"
+            if command -v toml >/dev/null 2>&1; then
+                toml "$CONFIG_FILE" 2>&1 | head -5 | while read line; do
+                    error "  $line"
+                done
+            else
+                error "No TOML validator available"
+            fi
             
             exit 1
         fi
