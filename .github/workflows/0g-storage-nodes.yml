@@ -52,7 +52,7 @@ jobs:
           echo "LOG_FILE=node-${{ matrix.node_id }}-$(date +%Y%m%d-%H%M%S).log" >> $GITHUB_ENV
 
       - name: Restore Node State
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/0g-storage-node/run/db
@@ -147,7 +147,7 @@ jobs:
 
       - name: Save Node State
         if: always()
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: |
             ~/0g-storage-node/run/db
@@ -157,7 +157,7 @@ jobs:
 
       - name: Upload Logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.node_id }}-logs-${{ github.run_number }}
           path: |
@@ -167,7 +167,7 @@ jobs:
 
       - name: Upload Node Stats
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: node-${{ matrix.node_id }}-stats-${{ github.run_number }}
           path: ~/.node-state/stats.json
@@ -179,7 +179,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download All Stats
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           pattern: '*-stats-*'
           merge-multiple: true
@@ -209,7 +209,7 @@ jobs:
           cat summary.md
 
       - name: Upload Summary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: summary-report-${{ github.run_number }}
           path: summary.md
