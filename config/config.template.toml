@@ -1,0 +1,162 @@
+# 0G Storage Node Configuration Template
+# This template will be populated by the GitHub Actions workflow
+
+#######################################################################
+###                   Network Configuration                        ###
+#######################################################################
+
+# Blockchain RPC endpoint
+blockchain_rpc_endpoint = "{{RPC_URL}}"
+
+# Log contract address for 0G testnet
+log_contract_address = "0x8873cc79c5b3b5666535C825205C9a128B1D75F1"
+
+# Log sync start block height 
+log_sync_start_block_height = 595059
+
+#######################################################################
+###                   Storage Configuration                        ###
+#######################################################################
+
+# Directory to store data
+db_dir = "db"
+
+# Log directory
+log_dir = "log"
+
+# Log configuration
+log_config_file = "log_config"
+
+# Maximum number of chunks to store
+db_max_num_chunks = 1000000000
+
+#######################################################################
+###                   Mining Configuration                         ###
+#######################################################################
+
+# Mining private key (will be populated by workflow)
+miner_key = "{{MINER_KEY}}"
+
+# Auto sync enabled
+auto_sync_enabled = true
+
+# Max sync file size (256MB) 
+max_sync_file_size = 268435456
+
+# Sync file by RPC enabled
+sync_file_by_rpc_enabled = true
+
+# Sync file on announcement enabled 
+sync_file_on_announcement_enabled = true
+
+#######################################################################
+###                   Network and RPC Configuration                ###
+#######################################################################
+
+# JSON RPC configuration
+[rpc]
+# RPC listen address 
+listen_address = "127.0.0.1:5678"
+# Enable HTTP
+enabled = true
+# Max request body size
+max_request_body_size = 33554432
+
+# Network configuration
+[network]
+# Network listen address - unique port per node instance
+listen_address = "/ip4/0.0.0.0/tcp/{{NODE_PORT}}"
+# Boot nodes for 0G testnet
+boot_nodes = [
+    "/ip4/54.219.26.22/tcp/1234/p2p/16Uiu2HAmTVDGNhkHD98zDnJxQWu3i1FL1aFYeh9wiQTNu4pDCgps",
+    "/ip4/52.52.127.117/tcp/1234/p2p/16Uiu2HAkzRjxK2gorngB1Zy87h6rPFenqGUx5PJL9PJ5vRwy6hk2",
+    "/ip4/18.167.69.68/tcp/1234/p2p/16Uiu2HAm2k6ua2mGgvZ8rTMV8GhpW71aVzkQWy7D37TTDuLCpgmX"
+]
+
+# Network discovery configuration  
+[network.discovery] 
+# Enable mDNS discovery
+enable_mdns = true
+
+#######################################################################
+###                   Sync Configuration                          ###
+#######################################################################
+
+[sync]
+# Neighbors to sync from
+neighbors = [
+    "54.219.26.22:1234",
+    "52.52.127.117:1234", 
+    "18.167.69.68:1234"
+]
+
+# Auto sync enabled
+auto_sync_enabled = true
+
+# Max sync file size
+max_sync_file_size = 268435456
+
+# Find peer timeout in seconds
+find_peer_timeout = "10s"
+
+# Sync file by RPC
+sync_file_by_rpc_enabled = true
+
+#######################################################################
+###                   Log Sync Configuration                      ###
+#######################################################################
+
+[log_sync]
+# RPC timeout
+rpc_timeout = "30s"
+
+# Rate limit
+rate_limit_retries = 100
+
+# Block delay for confirmation
+confirmation_block_count = 3
+
+# Batch size for log sync
+batch_size = 100
+
+# Watch loop wait time
+watch_loop_wait_time_ms = 10000
+
+#######################################################################
+###                   Chunk Pool Configuration                    ###
+#######################################################################
+
+[chunk_pool]
+# Write window size
+write_window_size = 4
+
+# Read window size  
+read_window_size = 4
+
+# Expiration time in seconds
+expiration_time_secs = 3600
+
+#######################################################################
+###                   Pruner Configuration                        ###
+#######################################################################
+
+[pruner]
+# Enable pruning
+enabled = false
+
+# Check time interval in seconds
+check_time_interval_secs = 60
+
+# Batch size for pruning
+batch_size = 1024
+
+# Batch wait time in milliseconds
+batch_wait_time_ms = 1000
+
+#######################################################################
+###                   Shard Configuration                         ###
+#######################################################################
+
+[shard]
+# Shard position - will be set based on node ID
+shard_position = "{{NODE_ID}}/5"

@@ -1,0 +1,189 @@
+name: 0G Storage Nodes - Parallel Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      node_count:
+        description: 'Number of parallel nodes to run'
+        required: true
+        default: '5'
+        type: string
+  schedule:
+    # Run every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    - cron: '0 */6 * * *'
+
+env:
+  NODE_VERSION: 'v1.1.0'
+  GO_VERSION: '1.24.3'
+  RUST_VERSION: 'stable'
+
+jobs:
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          NODE_COUNT=${{ github.event.inputs.node_count || '5' }}
+          MATRIX=$(seq 1 $NODE_COUNT | jq -R . | jq -s .)
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  storage-nodes:
+    needs: setup-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours
+    strategy:
+      matrix:
+        node_id: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
+      fail-fast: false
+      max-parallel: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node Environment
+        run: |
+          echo "NODE_ID=${{ matrix.node_id }}" >> $GITHUB_ENV
+          echo "WORKSPACE_PATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "LOG_FILE=node-${{ matrix.node_id }}-$(date +%Y%m%d-%H%M%S).log" >> $GITHUB_ENV
+
+      - name: Restore Node State
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            ~/0g-storage-node/run/db
+            ~/0g-storage-node/run/log
+            ~/.node-state
+          key: 0g-node-${{ matrix.node_id }}-${{ github.run_number }}
+          restore-keys: |
+            0g-node-${{ matrix.node_id }}-
+
+      - name: Setup Dependencies
+        run: |
+          chmod +x scripts/setup-node.sh
+          ./scripts/setup-node.sh
+        env:
+          NODE_ID: ${{ matrix.node_id }}
+
+      - name: Configure Node
+        run: |
+          # Extract the private key for this node instance
+          MINER_KEY=$(echo '${{ secrets.MINER_PRIVATE_KEYS }}' | jq -r ".[${{ matrix.node_id }} - 1]")
+          RPC_URL=$(echo '${{ secrets.RPC_ENDPOINTS }}' | jq -r ".[${{ matrix.node_id }} - 1] // .[0]")
+          
+          if [ "$MINER_KEY" == "null" ] || [ -z "$MINER_KEY" ]; then
+            echo "Error: No miner key found for node ${{ matrix.node_id }}"
+            exit 1
+          fi
+          
+          # Create config from template
+          cp config/config.template.toml ~/0g-storage-node/run/config.toml
+          
+          # Replace placeholders
+          sed -i "s/{{MINER_KEY}}/$MINER_KEY/g" ~/0g-storage-node/run/config.toml
+          sed -i "s|{{RPC_URL}}|$RPC_URL|g" ~/0g-storage-node/run/config.toml
+          sed -i "s/{{NODE_ID}}/${{ matrix.node_id }}/g" ~/0g-storage-node/run/config.toml
+
+      - name: Download Snapshot (if needed)
+        run: |
+          if [ ! -d "$HOME/0g-storage-node/run/db/flow_db" ]; then
+            echo "Downloading snapshot for faster sync..."
+            cd ~/0g-storage-node/run/db/
+            wget -q https://github.com/Mayankgg01/0G-Storage-Node-Guide/releases/download/v1.0/flow_db.tar.zst.part-aa
+            wget -q https://github.com/Mayankgg01/0G-Storage-Node-Guide/releases/download/v1.0/flow_db.tar.zst.part-ab
+            cat flow_db.tar.zst.part-* > flow_db.tar.zst
+            tar --use-compress-program=unzstd -xvf flow_db.tar.zst
+            rm flow_db.tar.zst.part-* flow_db.tar.zst
+            echo "Snapshot downloaded and extracted"
+          else
+            echo "Existing database found, skipping snapshot download"
+          fi
+
+      - name: Start Storage Node
+        run: |
+          chmod +x scripts/run-node.sh
+          ./scripts/run-node.sh
+        env:
+          NODE_ID: ${{ matrix.node_id }}
+          LOG_FILE: ${{ env.LOG_FILE }}
+        timeout-minutes: 350  # 5h 50min to allow cleanup time
+
+      - name: Cleanup and Save State
+        if: always()
+        run: |
+          chmod +x scripts/cleanup.sh
+          ./scripts/cleanup.sh
+        env:
+          NODE_ID: ${{ matrix.node_id }}
+
+      - name: Save Node State
+        if: always()
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            ~/0g-storage-node/run/db
+            ~/0g-storage-node/run/log
+            ~/.node-state
+          key: 0g-node-${{ matrix.node_id }}-${{ github.run_number }}
+
+      - name: Upload Logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: node-${{ matrix.node_id }}-logs-${{ github.run_number }}
+          path: |
+            ~/0g-storage-node/run/log/*.log*
+            ${{ env.LOG_FILE }}
+          retention-days: 7
+
+      - name: Upload Node Stats
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: node-${{ matrix.node_id }}-stats-${{ github.run_number }}
+          path: ~/.node-state/stats.json
+          retention-days: 7
+
+  summary:
+    needs: storage-nodes
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Stats
+        uses: actions/download-artifact@v3
+        with:
+          pattern: '*-stats-*'
+          merge-multiple: true
+
+      - name: Generate Summary Report
+        run: |
+          echo "# 0G Storage Nodes Summary Report" > summary.md
+          echo "**Run ID:** ${{ github.run_number }}" >> summary.md
+          echo "**Timestamp:** $(date -u)" >> summary.md
+          echo "" >> summary.md
+          
+          for stats_file in */stats.json; do
+            if [ -f "$stats_file" ]; then
+              NODE_ID=$(jq -r '.node_id' "$stats_file")
+              SYNC_HEIGHT=$(jq -r '.final_sync_height' "$stats_file")
+              PEERS=$(jq -r '.connected_peers' "$stats_file")
+              UPTIME=$(jq -r '.uptime_minutes' "$stats_file")
+              
+              echo "## Node $NODE_ID" >> summary.md
+              echo "- **Final Sync Height:** $SYNC_HEIGHT" >> summary.md
+              echo "- **Connected Peers:** $PEERS" >> summary.md
+              echo "- **Uptime:** ${UPTIME} minutes" >> summary.md
+              echo "" >> summary.md
+            fi
+          done
+          
+          cat summary.md
+
+      - name: Upload Summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: summary-report-${{ github.run_number }}
+          path: summary.md
+          retention-days: 30
